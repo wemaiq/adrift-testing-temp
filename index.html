@@ -20,12 +20,12 @@
 
 <!-- SEO + AEO Metadata -->
 <title>Adrift — A Quiet Place to Share or Read Anonymous Doubts</title>
-<meta name="description" content="Adrift is a quiet digital space where people can anonymously share doubts as paper boats, or read others’ doubts drifting in and out of view.">
+<meta name="description" content="Adrift is a quiet digital space where people can anonymously share doubts as paper boats, or read others' doubts drifting in and out of view.">
 <meta name="keywords" content="anonymous doubts, share doubts, read doubts, paper boats, quiet space, uncertainty">
 
 <!-- Open Graph -->
 <meta property="og:title" content="Adrift — A Quiet Place to Share or Read Anonymous Doubts">
-<meta property="og:description" content="A quiet place to anonymously share doubts as paper boats, or read others’ drifting doubts.">
+<meta property="og:description" content="A quiet place to anonymously share doubts as paper boats, or read others' drifting doubts.">
 <meta property="og:url" content="https://adrift.site/">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://adrift.site/Opengraph-adrift.jpg">
@@ -56,6 +56,8 @@
 }
 </script>
 
+<!-- Cloudflare Turnstile -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
 <!-- Favicons -->
 <link rel="icon" type="image/svg+xml" sizes="16x16" href="favicon-adrift-16x16.svg">
@@ -575,16 +577,30 @@
     box-shadow: 0 0 0 1px rgba(255, 180, 60, 0.15);
   }
   .compose-foot{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:12px; color:#4c5562; }
- .compose-disclaimer {
-  font-size: 11px;
-  color: rgba(16,21,28,0.55);
-  text-align: center;
-  margin-top: 14px;
-}
+  
+  /* Turnstile widget container */
+  .turnstile-container {
+    display: flex;
+    justify-content: center;
+    margin: 12px 0 8px 0;
+    min-height: 65px;
+  }
+  
+  .compose-disclaimer {
+    font-size: 11px;
+    color: rgba(16,21,28,0.55);
+    text-align: center;
+    margin-top: 8px;
+  }
+  
   .pill-btn{ padding:12px 18px; border-radius:999px; border:1px solid rgba(0,0,0,.12); background:#0f172a; color:#fff; cursor:pointer; }
   .pill-btn:focus-visible {
     outline: 2px solid rgba(255, 180, 60, 0.5);
     outline-offset: 2px;
+  }
+  .pill-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .note .compose-field { touch-action: auto; user-select: text; }
@@ -785,6 +801,9 @@ header.ripple span.figtree-adrift {
   <script src="./rain.js" defer=""></script>
 
 <script>
+  // Add your Turnstile site key here
+  const TURNSTILE_SITE_KEY = '0x4AAAAAAB2dU8s_5y0RaCr2';
+  
   /* =====================
      Intro sequence
      ===================== */
@@ -1157,7 +1176,7 @@ header.ripple span.figtree-adrift {
     const rainP  = preloadScriptAlreadyInPage('rain.js');
     const dataP  = preloadData();
 
-    // Safety cap (4s) so we don’t hang forever waiting on a stubborn canplaythrough
+    // Safety cap (4s) so we don't hang forever waiting on a stubborn canplaythrough
     const cap = new Promise(res => setTimeout(res, 4000));
 
     await Promise.race([
@@ -1381,13 +1400,27 @@ function animateDoubtCounter(el, targetValue) {
   /* ---------- n8n webhook (TEST URL now; switch to /webhook/… for prod) ---------- */
   const N8N_WEBHOOK_URL = 'https://alexmiretski.app.n8n.cloud/webhook/release-doubt-and-care';
 
+  // Turnstile token storage
+  let turnstileToken = null;
+  let turnstileWidgetId = null;
 
   async function postDoubtToN8N(text){
+    if (!turnstileToken) {
+      throw new Error('Please complete the verification first');
+    }
+    
     const res = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ 
+        text,
+        turnstileToken 
+      })
     });
+    
+    // Reset token after use
+    turnstileToken = null;
+    
     let data = {};
     try { data = await res.json(); } catch(e) {}
     if (!res.ok || data?.ok === false) {
@@ -1440,765 +1473,3 @@ function animateDoubtCounter(el, targetValue) {
     if (supportColumn) {
       supportColumn.hidden = true;
       supportColumn.setAttribute('aria-hidden', 'true');
-    }
-
-    document.body.classList.toggle('cheers-view', showingCheers);
-
-    if (releaseBtn) {
-      const label = showingCheers ? 'Release a care note' : 'Release a doubt';
-      releaseBtn.textContent = label;
-      releaseBtn.setAttribute('aria-label', label);
-    }
-  }
-
-  updateToggleState();
-  applyViewState();
-
-  /* ====== Media autoplay ====== */
-const DEFAULT_VOL = 0.28;
-function startAudio(){ bgAudio.volume = DEFAULT_VOL; bgAudio.play().then(()=> updateSoundUI(true)).catch(()=>{}); }
-function updateSoundUI(on){ soundToggle.classList.toggle('active', !!on); soundToggle.setAttribute('aria-pressed', on ? 'true' : 'false'); soundToggle.textContent = on ? 'Sound: On' : 'Sound: Off'; }
-
-let videoReady = false;
-let videoRestartAttempts = 0;
-const MAX_RESTART_ATTEMPTS = 2;
-let videoReadyCheckTimeoutId = null;
-
-boatVideo.addEventListener('canplay', () => {
-  videoReady = true;
-  if (videoReadyCheckTimeoutId) {
-    clearTimeout(videoReadyCheckTimeoutId);
-    videoReadyCheckTimeoutId = null;
-  }
-  if (boatVideo.paused) {
-    boatVideo.play().catch(() => {});
-  }
-});
-
-function checkAndRestartVideo() {
-  if (!videoReady && videoRestartAttempts < MAX_RESTART_ATTEMPTS) {
-    console.warn(`Video not ready after timeout, attempting restart ${videoRestartAttempts + 1}/${MAX_RESTART_ATTEMPTS}`);
-    videoRestartAttempts++;
-
-    const currentSrc = boatVideo.src;
-    boatVideo.src = '';
-    boatVideo.load();
-    boatVideo.src = currentSrc + '?t=' + Date.now();
-
-    setTimeout(() => {
-      boatVideo.play().catch(() => {
-        console.error('Video restart failed');
-      });
-    }, 500);
-
-    if (videoRestartAttempts < MAX_RESTART_ATTEMPTS) {
-      setTimeout(checkAndRestartVideo, 8000);
-    }
-  }
-}
-
-function scheduleVideoReadyCheck() {
-  if (videoReadyCheckTimeoutId) {
-    clearTimeout(videoReadyCheckTimeoutId);
-  }
-  videoReadyCheckTimeoutId = setTimeout(() => {
-    if (!videoReady) {
-      checkAndRestartVideo();
-    }
-  }, 15000);
-}
-
-function updateBoatVideoSource(view) {
-  if (!boatVideo) return;
-  const desiredSrc = BOAT_VIDEO_SOURCES[view] || BOAT_VIDEO_SOURCES.doubts;
-  if (activeBoatVideoSrc === desiredSrc) return;
-
-  activeBoatVideoSrc = desiredSrc;
-  videoReady = false;
-  videoRestartAttempts = 0;
-
-  if (videoReadyCheckTimeoutId) {
-    clearTimeout(videoReadyCheckTimeoutId);
-    videoReadyCheckTimeoutId = null;
-  }
-
-  boatVideo.pause();
-  boatVideo.src = desiredSrc;
-  boatVideo.load();
-  boatVideo.play().catch(() => {});
-  scheduleVideoReadyCheck();
-}
-
-// Start immediately, don't wait
-boatVideo.play().catch(() => {});
-scheduleVideoReadyCheck();
-
-/* ==== CHANGED: don’t start audio when clicking Enter ==== */
-let audioStarted = false;
-function ensurePlay(e){
-  if (audioStarted) return;
-
-  // Ignore interactions on the intro overlay (e.g., clicking "Enter")
-  const overlay = document.getElementById('intro-overlay');
-  if (overlay && e && overlay.contains(e.target)) {
-    return; // do nothing; keep listeners for later interactions
-  }
-
-  if (!videoReady) {
-    console.log('User interaction - forcing video restart');
-    checkAndRestartVideo();
-  }
-  boatVideo.play().catch(() => {});
-  startAudio();
-  audioStarted = true;
-
-  // Clean up listeners after first successful start outside the intro
-  removeEventListener('pointerdown', ensurePlay);
-  removeEventListener('keydown', ensurePlay);
-}
-addEventListener('pointerdown', ensurePlay);
-addEventListener('keydown', ensurePlay);
-/* ==== end change ==== */
-
-soundToggle.addEventListener('click', ()=>{ if(bgAudio.paused){ startAudio(); } else { bgAudio.pause(); updateSoundUI(false); } });
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !bgAudio.paused){ bgAudio.play().catch(()=>{}); } });
-
-  /* ===== Boats ===== */
-  const CROP = {x:0, y:0, w:1, h:1};
-  const BOAT_COUNT = window.innerWidth <= 640 ? 8 : 11, BOAT_HEIGHT=140;
-  const SPEED_X=0.10, BOB_AMPL=12, BOB_FREQ=0.0016;
-
-  const COLLISION_PAD = 15, PUSH_STRENGTH = 0.02, FRICTION = 0.34;
-
-  // Perspective tuning
-  const PERSPECTIVE_MIN_SCALE = 0.70;
-  const PERSPECTIVE_MAX_SCALE = 1.35;
-  const OPACITY_MIN = 0.35;
-  const OPACITY_MAX = 0.95;
-
-  // Holds fetched approved doubts and session tracking
-let APPROVED_DOUBTS = [];
-let USED_DOUBT_IDS = new Set(); // Track used doubts this session
-let SHUFFLED_DOUBTS = []; // Pre-shuffled pool for current session
-
-function shuffleArray(array) {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
-
-function initializeDoubtPool() {
-  // Double shuffle for more randomness
-  let shuffled = shuffleArray(APPROVED_DOUBTS);
-  
-  // Start from a random position in the shuffled array
-  const randomStart = Math.floor(Math.random() * shuffled.length);
-  shuffled = [...shuffled.slice(randomStart), ...shuffled.slice(0, randomStart)];
-  
-  SHUFFLED_DOUBTS = shuffled;
-  USED_DOUBT_IDS.clear();
-  console.log('Initialized shuffled doubt pool:', SHUFFLED_DOUBTS.length, 'doubts');
-}
-
-function pickRandomDoubt() {
-  if (APPROVED_DOUBTS.length === 0) {
-    // Safe placeholder if fetch returns nothing (or before it completes)
-    return { text: "…", date: new Date().toISOString().slice(0,10), id: "placeholder" };
-  }
-
-  // If we've used all doubts, reinitialize the pool
-  if (USED_DOUBT_IDS.size >= APPROVED_DOUBTS.length) {
-    console.log('All doubts used, reshuffling pool');
-    initializeDoubtPool();
-  }
-
-  // Find the next unused doubt from our shuffled pool
-  let selectedDoubt = null;
-  for (const doubt of SHUFFLED_DOUBTS) {
-    if (!USED_DOUBT_IDS.has(doubt.id)) {
-      selectedDoubt = doubt;
-      USED_DOUBT_IDS.add(selectedDoubt.id);
-      break;
-    }
-  }
-
-  // Fallback (shouldn't happen with the logic above)
-  if (!selectedDoubt) {
-    selectedDoubt = SHUFFLED_DOUBTS[0];
-    USED_DOUBT_IDS.add(selectedDoubt.id);
-  }
-
-  return selectedDoubt;
-}
-
-
-  async function refreshDoubtPool() {
-  try {
-    const freshDoubts = await fetchApprovedDoubts(600);
-    if (freshDoubts.length > 0) {
-      const oldLength = APPROVED_DOUBTS.length;
-      APPROVED_DOUBTS = freshDoubts;
-      
-      // Only reinitialize if we got significantly more doubts
-      if (freshDoubts.length > oldLength * 1.2) {
-        initializeDoubtPool();
-        console.log('Refreshed and reshuffled doubt pool:', APPROVED_DOUBTS.length, 'doubts');
-      } else {
-        console.log('Refreshed doubt pool:', APPROVED_DOUBTS.length, 'doubts');
-      }
-    }
-  } catch (err) {
-    console.error('Failed to refresh doubts:', err);
-    // Keep using existing doubts if refresh fails
-  }
-}
-
-
-  class Boat{
-    constructor(variant = 'doubt'){
-      this.variant = variant;
-      this.reset(true);
-    }
-    reset(initial = false) {
-      // Use canvas dimensions directly (no DPR scaling)
-      this.yBase = Math.random() * H * 0.75 + H * 0.1;
-
-      // ENTRY: start fully off-screen to the left (by half-width + 2px)
-      const approxW = this._w || (BOAT_HEIGHT * 1.8);
-      this.x = initial ? Math.random() * W : -(approxW * 0.5);
-
-      this.phase = Math.random() * Math.PI * 2;
-      this.alpha = 0.95;
-
-      const baseEntry = this.variant === 'cheer' ? pickRandomCareNote() : pickRandomDoubt();
-      this.entry = { ...baseEntry, type: this.variant };
-
-      this._h = BOAT_HEIGHT;
-      this._w = BOAT_HEIGHT * 1.8;
-      this.vx = 0;
-      this.vy = 0;
-      this.highlightUntil = 0;
-      this.paused = false;
-      this.morphingIn = false;
-      this.morphingOut = false;
-      this.morphT0 = 0;
-    }
-
-    update(t, boats){
-      const canMove = !(this.morphingOut);
-      if(canMove){ 
-        this.x += SPEED_X + this.vx; 
-        if(this.x > W + (this._w||160)) this.reset(false); 
-      }
-      const bob = Math.sin(this.phase + t*BOB_FREQ) * BOB_AMPL; 
-      this.y = this.yBase + bob + this.vy;
-
-      const w = this._w || (BOAT_HEIGHT*1.8), h = this._h || BOAT_HEIGHT;
-      for(const other of boats){
-        if(other === this) continue;
-        const ow = other._w || (BOAT_HEIGHT*1.8), oh = other._h || BOAT_HEIGHT;
-        const halfW = w*0.5 + COLLISION_PAD, halfH = h*0.5 + COLLISION_PAD;
-        const otherHalfW = ow*0.5 + COLLISION_PAD, otherHalfH = oh*0.5 + COLLISION_PAD;
-        const dx = this.x - other.x, dy = this.y - other.y;
-        const overlapX = (halfW + otherHalfW) - Math.abs(dx);
-        const overlapY = (halfH + otherHalfH) - Math.abs(dy);
-        if(overlapX > 0 && overlapY > 0){
-          if(overlapX < overlapY){ 
-            const dirX = Math.sign(dx) || (Math.random()<0.5 ? 1 : -1); 
-            this.vx += dirX * overlapX * PUSH_STRENGTH; 
-          }
-          else { 
-            const dirY = Math.sign(dy) || (Math.random()<0.5 ? 1 : -1); 
-            this.vy += dirY * overlapY * PUSH_STRENGTH; 
-          }
-        }
-      }
-      this.vx *= FRICTION; 
-      this.vy *= FRICTION;
-    }
-    draw(now){
-      if(!videoReady) return;
-      const vW=boatVideo.videoWidth||640, vH=boatVideo.videoHeight||360;
-      const srcW=vW*CROP.w, srcH=vH*CROP.h, srcX=vW*CROP.x, srcY=vH*CROP.y;
-
-      // PERSPECTIVE: scale & opacity by vertical position
-      const yNorm = Math.max(0, Math.min(1, (this.y || this.yBase) / H));
-      const scale = PERSPECTIVE_MIN_SCALE + (PERSPECTIVE_MAX_SCALE - PERSPECTIVE_MIN_SCALE) * yNorm;
-
-      // Bottom 50% = full opacity; top 50% fades
-      let a;
-      if (yNorm >= 0.5) {
-        a = 1;
-      } else {
-        const t = yNorm / 0.5;
-        a = OPACITY_MIN + (1 - OPACITY_MIN) * t;
-      }
-      if(this.morphingOut) a = 0;
-      if(a <= 0) return;
-
-      const displayH = BOAT_HEIGHT * scale;
-      const displayW = displayH * (srcW/srcH);
-      this._w=displayW; this._h=displayH;
-
-      ctx.save();
-      ctx.translate(this.x, this.y);
-
-      if(this.highlightUntil){
-        const remaining = this.highlightUntil - performance.now();
-        if(remaining > 0){
-          const duration = 6000;
-          const tFrac = Math.max(0, remaining/duration);
-          const fade = 1 - (1 - tFrac) * (1 - tFrac);
-          ctx.save();
-          ctx.globalAlpha = fade;
-          const g = ctx.createRadialGradient(0,0,10, 0,0,220);
-          g.addColorStop(0,'rgba(255,240,160,.35)');
-          g.addColorStop(0.35,'rgba(255,210,100,.18)');
-          g.addColorStop(1,'rgba(255,210,100,0)');
-          ctx.globalCompositeOperation='screen';
-          ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,220,0,Math.PI*2); ctx.fill();
-          ctx.restore();
-        } else {
-          this.highlightUntil = 0;
-        }
-      }
-
-      // FIXED: iOS-compatible blend mode rendering
-      ctx.globalAlpha = a;
-
-      const supportsFilter = typeof ctx.filter !== 'undefined';
-      const prevFilter = supportsFilter ? ctx.filter : null;
-      if (supportsFilter) {
-        ctx.filter = this.variant === 'cheer' ? 'hue-rotate(68deg)' : 'none';
-      }
-
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-      if(isIOS) {
-        const dpr = window.devicePixelRatio || 1;
-        const offCanvas = document.createElement('canvas');
-        offCanvas.width = displayW * dpr;
-        offCanvas.height = displayH * dpr;
-        const offCtx = offCanvas.getContext('2d');
-        offCtx.scale(dpr, dpr);
-        offCtx.drawImage(boatVideo, srcX, srcY, srcW, srcH, 0, 0, displayW, displayH);
-        ctx.globalCompositeOperation = 'screen';
-        ctx.drawImage(offCanvas, -displayW/2, -displayH/2, displayW, displayH);
-        ctx.globalCompositeOperation = 'source-over';
-      } else {
-        const prev = ctx.globalCompositeOperation;
-        ctx.globalCompositeOperation = 'screen';
-        ctx.drawImage(boatVideo, srcX,srcY,srcW,srcH, -displayW/2, -displayH/2, displayW, displayH);
-        ctx.globalCompositeOperation = prev;
-      }
-
-      if (supportsFilter) {
-        ctx.filter = prevFilter;
-      }
-
-      ctx.restore();
-    }
-    hit(mx,my){ 
-      return mx>=this.x-this._w/2 && mx<=this.x+this._w/2 && 
-             my>=this.y-this._h/2 && mx!=null && my!=null && 
-             my>=this.y-this._h/2 && my<=this.y+this._h/2; 
-    }
-  }
-
-  // Will be filled after Supabase fetch
-  let boats = [];
-
-  // Also add a periodic refresh every 5 minutes
-  setInterval(refreshDoubtPool, 5 * 60 * 1000);
-
-  /* ===== Unfolding NOTE factory (boat + composer) ===== */
-  let overlay=null, noteEl=null, noteBoat=null, noteClosing=false, composerOpen=false;
-
-  const NO_DRAG_SELECTOR = 'textarea, input, select, button, a, [contenteditable="true"], .compose-field, .pill-btn, .note-close';
-
-  function makeDraggable(el, size){
-    let dragging=false, startX=0, startY=0, startLeft=0, startTop=0;
-    const clamp=(v,min,max)=>Math.max(min, Math.min(max, v));
-
-    el.addEventListener('pointerdown', (e)=>{
-      if(e.button && e.button !== 0) return;
-      if (e.target.closest(NO_DRAG_SELECTOR)) return;
-      dragging = true;
-      el.classList.add('dragging');
-      el.setPointerCapture(e.pointerId);
-      startX = e.clientX; startY = e.clientY;
-      startLeft = parseFloat(el.style.left)||0;
-      startTop  = parseFloat(el.style.top)||0;
-      e.preventDefault();
-    });
-
-    el.addEventListener('pointermove', (e)=>{
-      if(!dragging) return;
-      const dx = e.clientX - startX, dy = e.clientY - startY;
-      let nextLeft = startLeft + dx, nextTop  = startTop  + dy;
-      const maxL = innerWidth  - size, maxT = innerHeight - size;
-      nextLeft = clamp(nextLeft, 0, Math.max(0, maxL));
-      nextTop  = clamp(nextTop , 0, Math.max(0, maxT));
-      el.style.left = nextLeft + 'px';
-      el.style.top  = nextTop  + 'px';
-    });
-
-    const endDrag=(e)=>{
-      if(!dragging) return;
-      dragging = false;
-      el.classList.remove('dragging');
-      try{ el.releasePointerCapture(e.pointerId); }catch(_){}
-    };
-    el.addEventListener('pointerup', endDrag);
-    el.addEventListener('pointercancel', endDrag);
-    el.addEventListener('lostpointercapture', ()=>{ dragging=false; el.classList.remove('dragging'); });
-  }
-
-  function createNote({ x = null, y = null, title, bodyHTML, metaHTML, boat = null, startScale = 0.72 }) {
-    overlay = document.createElement('div');
-    overlay.className = 'note-overlay';
-    overlay.innerHTML = `<div class="overlay-close" aria-hidden="true"></div>`;
-    document.body.appendChild(overlay);
-
-    noteEl = document.createElement('div');
-    noteEl.className = 'note';
-
-    // Responsive size
-    const maxSize = Math.min(350, window.innerWidth * 0.9);
-    const size = maxSize;
-    const posX = (x ?? innerWidth / 2) - size / 2;
-    const posY = (y ?? innerHeight / 2) - size / 2;
-
-    noteEl.style.left = `${posX}px`;
-    noteEl.style.top = `${posY}px`;
-    noteEl.style.width = `${size}px`;
-    noteEl.style.height = `${size}px`;
-    noteEl.style.transformOrigin = 'center center';
-    noteEl.style.transform = `scale(${startScale}) translateZ(0)`;
-
-    const stage = document.createElement('div'); stage.className = 'note-stage';
-    const frame = document.createElement('div'); frame.className = 'note-frame';
-    noteEl.append(stage, frame);
-
-    function makeBox(circleClass){
-      const b = document.createElement('div'); b.className = 'note-box';
-      const i = document.createElement('div'); i.className = 'note-in ' + circleClass;
-      b.appendChild(i);
-      return b;
-    }
-    stage.append(makeBox('one'), makeBox('two'), makeBox('thr'), makeBox('fou'));
-
-    const content = document.createElement('div'); content.className='note-content';
-    content.innerHTML = `
-      <div class="note-title">${title}</div>
-      ${bodyHTML}
-      ${metaHTML||''}
-    `;
-    noteEl.appendChild(content);
-
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'note-close';
-    closeBtn.setAttribute('aria-label','Close note');
-    closeBtn.innerHTML = '&times;';
-    closeBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); });
-    closeBtn.addEventListener('click', (e)=>{ e.stopPropagation(); closeNote(); });
-    closeBtn.addEventListener('transitionend', (e)=>{
-      if(e.propertyName === 'opacity' && getComputedStyle(closeBtn).opacity === '1'){
-        closeBtn.style.pointerEvents = 'auto';
-      }
-    });
-    noteEl.appendChild(closeBtn);
-
-    overlay.appendChild(noteEl);
-    noteBoat = boat || null;
-
-    makeDraggable(noteEl, size);
-
-    requestAnimationFrame(()=>{
-      noteEl.style.transform = 'scale(1) translateZ(0)';
-      setTimeout(()=> noteEl.classList.add('unfold'), 140);
-    });
-
-    overlay.querySelector('.overlay-close').addEventListener('click', closeNote, {once:true});
-  }
-
-  function closeNote(){
-    if(!noteEl || noteClosing) return;
-    noteClosing = true;
-
-    if(noteBoat){
-      noteBoat.morphingIn = false;
-      // Don't set morphingOut - let the boat continue floating
-    }
-
-    noteEl.classList.add('closing');
-
-    const FINISH = ()=> {
-      overlay?.remove(); overlay=null; noteEl=null;
-      noteBoat = null; noteClosing = false; composerOpen = false;
-    };
-
-    let done=false;
-    noteEl.addEventListener('transitionend', (e)=>{
-      if(done || e.propertyName !== 'opacity') return;
-      done=true; FINISH();
-    }, {once:true});
-    setTimeout(()=>{ if(!done) FINISH(); }, 280);
-  }
-
-  function openNoteFromBoat(boat){
-    boat.morphingIn = true;
-    boat.morphT0 = performance.now();
-    const entry = boat.entry || {};
-    const variant = boat.variant || entry.type || 'doubt';
-
-    const metaParts = [];
-    if (entry.date) {
-      const parsed = new Date(entry.date + 'T00:00:00');
-      if (!Number.isNaN(parsed.getTime())) {
-        metaParts.push(parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }));
-      }
-    }
-    if (variant === 'cheer' && entry.attribution) {
-      metaParts.push(entry.attribution);
-    }
-
-    const meta = metaParts.length ? `<div class="note-meta">${escapeHtml(metaParts.join(' • '))}</div>` : '';
-    const body = `<div class="note-text">${escapeHtml(entry.text || '').replace(/\n/g, '<br>')}</div>`;
-
-    const noteTitle = variant === 'cheer' ? 'Community Care' : 'Anonymous Doubt';
-    const maxSize = Math.min(350, window.innerWidth * 0.9);
-
-    // Center notes on mobile devices (640px and below)
-    const isMobile = window.innerWidth <= 640;
-    const noteX = isMobile ? innerWidth / 2 : boat.x;
-    const noteY = isMobile ? innerHeight / 2 : boat.y;
-
-    createNote({ x:noteX, y:noteY, title:noteTitle, bodyHTML:body, metaHTML:meta, boat, startScale:(boat._h/maxSize)*0.9 });
-  }
-
-  /* CTA → composer note */
-  function openComposerNote() {
-    composerOpen = true;
-
-    const isCheersView = currentView === 'affirmations';
-    const noteTitle = isCheersView ? 'Release a care note' : 'Release your doubt';
-    const placeholderText = isCheersView ? 'Type your care note (200 characters max)' : 'Type your doubt (200 characters max)';
-
-    const body = `
-      <textarea class="compose-field" id="releaseInput" maxlength="200" placeholder="${placeholderText}"></textarea>
-      <div class="compose-foot">
-        <div><span id="charCount">0</span>/200</div>
-        <button class="pill-btn" id="submitDoubt" type="button">Release</button>
-      </div>
-      <p class="compose-disclaimer">If you’re struggling with self-harm, please reach out for help at findahelpline.com. Offensive content will be removed.</p>
-    `;
-
-    createNote({
-      x: innerWidth / 2,
-      y: innerHeight / 2,
-      title: noteTitle,
-      bodyHTML: body,
-      metaHTML: '',
-      boat: null,
-      startScale: 0.72
-    });
-
-    const input = document.getElementById('releaseInput');
-    const count = document.getElementById('charCount');
-    const submit = document.getElementById('submitDoubt');
-
-    input.addEventListener('input', () => {
-      count.textContent = input.value.length;
-    });
-    setTimeout(() => input.focus(), 50);
-
-    async function doRelease() {
-      const text = (input.value || '').trim();
-      if (!text) {
-        input.focus();
-        return;
-      }
-
-      submit.disabled = true;
-      const prev = submit.textContent;
-      submit.textContent = 'Releasing…';
-      const variant = getCurrentVariant();
-
-      try {
-        const { id, created_at, doubt } = await postDoubtToN8N(text);
-        const b = new Boat(variant);
-        b.entry = {
-          text: doubt,
-          date: (created_at || new Date().toISOString()).slice(0, 10),
-          id,
-          type: variant
-        };
-        if (variant === 'cheer') {
-          const careEntry = {
-            ...b.entry,
-            attribution: b.entry.attribution || 'Shared from the drift',
-            active: true
-          };
-          b.entry = careEntry;
-          setSupportNotes([...SUPPORT_NOTES, careEntry]);
-        }
-        b.x = innerWidth / 2;
-        b.yBase = innerHeight / 2;
-        b.phase = 0;
-        b.highlightUntil = performance.now() + 6000;
-        boats.push(b);
-        closeNote();
-      } catch (err) {
-        console.error('Release failed:', err);
-        const friendlyType = variant === 'cheer' ? 'care note' : 'doubt';
-        alert(err.message || `Failed to release your ${friendlyType}.`);
-      } finally {
-        submit.disabled = false;
-        submit.textContent = prev;
-      }
-    }
-
-    submit.addEventListener('click', doRelease);
-    input.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        doRelease();
-      }
-    });
-  }
-
-  /* Loop */
-  function animate(now=0){ 
-    ctx.clearRect(0,0,W,H); 
-
-    // Update all first
-    for(const b of boats){ 
-      b.update(now, boats); 
-    }
-
-    // Draw sorted by y for proper layering (back-to-front)
-    const byDepth = [...boats].sort((a,b)=> (a.y||a.yBase) - (b.y||b.yBase));
-    for(const b of byDepth){
-      b.draw(now);
-    }
-
-    requestAnimationFrame(animate); 
-  }
-  
-  // Start animation immediately, don't wait for intro
-  animate();
-
-  /* Interactions */
-  // Handle hover cursor
-  canvas.addEventListener('pointermove', e=>{
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    let overBoat = false;
-    
-    for(const b of boats){ 
-      if(b.hit(mx,my) && !b.morphingOut){
-        overBoat = true;
-        break;
-      }
-    }
-    
-    canvas.style.cursor = overBoat ? 'pointer' : 'default';
-  });
-  
-  canvas.addEventListener('click', e=>{
-    if(composerOpen) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    for(const b of boats){ 
-      if(b.hit(mx,my)){ 
-        if(b.morphingOut) return; 
-        openNoteFromBoat(b); 
-        break; 
-      } 
-    }
-  });
-  releaseBtn.addEventListener('click', openComposerNote);
-  addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeNote(); } });
-
- /* =========
-     Boot flow
-     ========= */
-  (async function init(){
-    const supportPromise = ensureSupportData(400);
-    try{
-      APPROVED_DOUBTS = await fetchApprovedDoubts(600);
-      if (APPROVED_DOUBTS.length === 0) {
-        console.warn('No approved doubts found; using placeholder.');
-        APPROVED_DOUBTS = [{ id:'p1', text:'(waiting for first approved doubt…)', date:new Date().toISOString().slice(0,10) }];
-      }
-
-      // Initialize the shuffled pool after loading doubts
-      initializeDoubtPool();
-
-    } catch(err){
-      console.error(err);
-      // Soft fallback if Supabase is unreachable
-      APPROVED_DOUBTS = [{ id:'p1', text:'(temporarily unable to load doubts)', date:new Date().toISOString().slice(0,10) }];
-      initializeDoubtPool();
-    } finally {
-      await supportPromise.catch(() => {});
-      // Seed boats only after we have something to show
-      boats = Array.from({length: BOAT_COUNT}, () => new Boat(getCurrentVariant()));
-    }
-
-// Update counter on load
-fetchTotalDoubts().then(count => {
-  if (!doubtCounter) return;
-  doubtCounter.style.visibility = 'visible';
-  if (count > 0) {
-    animateDoubtCounter(doubtCounter, count);
-  } else {
-    doubtCounter.textContent = '0 boats released';
-  }
-}).catch(() => {
-  if (doubtCounter) doubtCounter.style.visibility = 'hidden';
-});
-})();
-</script>
-
-
-
-<script>
-(() => {
-  const header = document.querySelector('header.ripple');
-  if (!header) return;
-
-  const frames = [
-    { opacity: 1, transform: 'translate3d(0,0,0) scale(1)', textShadow: '0 0 0 #fff' },
-    { offset: 0.4, opacity: 0.35 },
-    { offset: 0.5, opacity: 1, transform: 'translate3d(0.5em,0,0) scale(1.1)', textShadow: '0 0 20px #fff' },
-    { offset: 0.75, opacity: 1, transform: 'translate3d(0,0,0) scale(1)', textShadow: '0 0 0 #fff' }
-  ];
-
-  const letters = [...header.children];
-  const anims = letters.map((el, i) => {
-    const a = el.animate(frames, {
-      duration: 4000,
-      fill: 'both',
-      delay: i * 60 // optional stagger
-    });
-    a.pause();
-    return a;
-  });
-
-  header.addEventListener('mouseenter', () => {
-    anims.forEach(a => { a.playbackRate = 1; a.play(); });
-  });
-
-  header.addEventListener('mouseleave', () => {
-    anims.forEach(a => a.reverse());
-  });
-})();
-</script>
-
-</body></html>
