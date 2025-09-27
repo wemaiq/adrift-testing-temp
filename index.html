@@ -787,6 +787,19 @@ header.ripple span.figtree-adrift {
   <script src="./rain.js" defer=""></script>
 
 <script>
+  // ===== Global loud logging =====
+  window.addEventListener('error', (e) => {
+    console.error('[window.onerror]', e.message, `${e.filename}:${e.lineno}:${e.colno}`, e.error);
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('[unhandledrejection]', e.reason);
+  });
+
+  /* =====================
+     Intro sequence
+
+
+<script>
   /* =====================
      Intro sequence
      ===================== */
@@ -1386,29 +1399,42 @@ let captchaWidgetId = null;
 let captchaToken = null;
 
 function renderTurnstileInvisible(mountSelector, attempts = 0) {
-  const MAX_ATTEMPTS = 20; // ~2s max waiting for the Turnstile library to be ready
+  const MAX_ATTEMPTS = 20; // ~2s
   if (window.turnstile && typeof window.turnstile.render === 'function') {
     try {
+      console.log('[TS] rendering at', mountSelector);
       captchaToken = null;
       captchaWidgetId = window.turnstile.render(mountSelector, {
         sitekey: TURNSTILE_SITE_KEY,
         size: 'invisible',
-        appearance: 'interaction-only', // invisible unless needed
-        callback: (t) => { captchaToken = t; },
-        'expired-callback': () => { captchaToken = null; },
-        'error-callback': () => { captchaToken = null; }
+        appearance: 'interaction-only',
+        callback: (t) => {
+          captchaToken = t;
+          console.log('[TS] callback token:', t?.slice?.(0, 12) || t);
+        },
+        'expired-callback': () => {
+          captchaToken = null;
+          console.warn('[TS] token expired');
+        },
+        'error-callback': (e) => {
+          captchaToken = null;
+          console.error('[TS] error-callback:', e);
+        }
       });
+      console.log('[TS] widget id:', captchaWidgetId);
     } catch (e) {
-      console.warn('Turnstile render failed', e);
+      console.warn('[TS] render failed:', e);
     }
     return;
   }
   if (attempts < MAX_ATTEMPTS) {
+    console.log('[TS] waiting for library… attempt', attempts + 1);
     setTimeout(() => renderTurnstileInvisible(mountSelector, attempts + 1), 100);
   } else {
-    console.warn('Turnstile loader not ready; will block on submit if needed.');
+    console.warn('[TS] loader not ready; will block on submit if needed.');
   }
 }
+
 
 function resetTurnstile() {
   if (window.turnstile && captchaWidgetId !== null) {
@@ -2061,6 +2087,7 @@ const submit = document.getElementById('submitDoubt');
 
 // give the DOM a tick so the container is fully in place
 setTimeout(() => {
+  console.log('[TS] mounting invisible widget now');
   renderTurnstileInvisible('#cf-turnstile-container');
 }, 50);
 
@@ -2082,41 +2109,43 @@ setTimeout(() => {
       const variant = getCurrentVariant();
 
       try {
-        // Execute Turnstile to get a fresh token
-async function getTurnstileToken() {
-  // wait (up to ~5s) for the widget to exist
-  let tries = 50;
-  while (captchaWidgetId === null && tries-- > 0) {
-    await new Promise(r => setTimeout(r, 100));
-  }
-  if (!window.turnstile || captchaWidgetId === null) return null;
-
-  try {
-    await window.turnstile.execute(captchaWidgetId);
-
-    // wait (up to ~3s) for the token to be readable
-    let tokenTries = 30;
-    while (!captchaToken && tokenTries-- > 0) {
-      const t = window.turnstile.getResponse
-        ? window.turnstile.getResponse(captchaWidgetId)
-        : null;
-      if (t) { captchaToken = t; break; }
+       // ---- TEMP: BYPASS TURNSTILE TO CONFIRM WEBHOOK ----
+const BYPASS_TS = true;             // <— set false again after testing
+if (!BYPASS_TS) {
+  async function getTurnstileToken() {
+    let tries = 50;
+    while (captchaWidgetId === null && tries-- > 0) {
       await new Promise(r => setTimeout(r, 100));
     }
-    return captchaToken || null;
-  } catch {
-    return null;
+    if (!window.turnstile || captchaWidgetId === null) return null;
+    try {
+      await window.turnstile.execute(captchaWidgetId);
+      let tokenTries = 30;
+      while (!captchaToken && tokenTries-- > 0) {
+        const t = window.turnstile.getResponse
+          ? window.turnstile.getResponse(captchaWidgetId)
+          : null;
+        if (t) { captchaToken = t; break; }
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return captchaToken || null;
+    } catch {
+      return null;
+    }
   }
-}
 
-captchaToken = await getTurnstileToken();
-
-if (!captchaToken) {
-  alert('Please complete the quick check, then try again.');
-  submit.disabled = false;
-  submit.textContent = prev;
-  return;
+  captchaToken = await getTurnstileToken();
+  if (!captchaToken) {
+    alert('Please complete the quick check, then try again.');
+    submit.disabled = false;
+    submit.textContent = prev;
+    return;
+  }
+} else {
+  captchaToken = 'BYPASS_TEST_TOKEN';
 }
+// ---- END TEMP ----
+
 
 // Send token with your text
 const { id, created_at, doubt } = await postDoubtToN8N(text, captchaToken);
