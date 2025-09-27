@@ -1399,26 +1399,26 @@ let captchaWidgetId = null;
 let captchaToken = null;
 
 function renderTurnstileInvisible(mountSelector, attempts = 0) {
-  const MAX_ATTEMPTS = 20; // ~2s
+  const MAX_ATTEMPTS = 50; // wait up to ~5s
   if (window.turnstile && typeof window.turnstile.render === 'function') {
     try {
       console.log('[TS] rendering at', mountSelector);
       captchaToken = null;
       captchaWidgetId = window.turnstile.render(mountSelector, {
         sitekey: TURNSTILE_SITE_KEY,
-        size: 'invisible',
-        appearance: 'interaction-only',
+        size: 'invisible',          // correct for an Invisible key
+        // appearance: 'interaction-only',  // ← REMOVE this for invisible keys
         callback: (t) => {
           captchaToken = t;
           console.log('[TS] callback token:', t?.slice?.(0, 12) || t);
         },
         'expired-callback': () => {
-          captchaToken = null;
           console.warn('[TS] token expired');
+          captchaToken = null;
         },
         'error-callback': (e) => {
-          captchaToken = null;
           console.error('[TS] error-callback:', e);
+          // do NOT clear captchaToken here if we already got one
         }
       });
       console.log('[TS] widget id:', captchaWidgetId);
@@ -2059,7 +2059,7 @@ resetTurnstile();
 
     const body = `
       <textarea class="compose-field" id="releaseInput" maxlength="200" placeholder="${placeholderText}"></textarea>
-      <div id="cf-turnstile-container" style="height:0;width:0;overflow:hidden;"></div>
+<div id="cf-turnstile-container" style="position:absolute;left:-9999px;top:-9999px;"></div>
 
       <div class="compose-foot">
         <div><span id="charCount">0</span>/200</div>
@@ -2113,26 +2113,32 @@ setTimeout(() => {
 const BYPASS_TS = true;             // <— set false again after testing
 if (!BYPASS_TS) {
   async function getTurnstileToken() {
-    let tries = 50;
-    while (captchaWidgetId === null && tries-- > 0) {
-      await new Promise(r => setTimeout(r, 100));
-    }
-    if (!window.turnstile || captchaWidgetId === null) return null;
-    try {
-      await window.turnstile.execute(captchaWidgetId);
-      let tokenTries = 30;
-      while (!captchaToken && tokenTries-- > 0) {
-        const t = window.turnstile.getResponse
-          ? window.turnstile.getResponse(captchaWidgetId)
-          : null;
-        if (t) { captchaToken = t; break; }
-        await new Promise(r => setTimeout(r, 100));
-      }
-      return captchaToken || null;
-    } catch {
-      return null;
-    }
+  // wait for the widget to exist (up to ~6s)
+  for (let i = 0; i < 60 && captchaWidgetId === null; i++) {
+    await new Promise(r => setTimeout(r, 100));
   }
+  if (!window.turnstile || captchaWidgetId === null) return null;
+
+  // ask Turnstile to issue a token
+  try {
+    await window.turnstile.execute(captchaWidgetId);
+  } catch (e) {
+    console.warn('[TS] execute threw:', e);
+  }
+
+  // prefer token from our render() callback
+  if (captchaToken) return captchaToken;
+
+  // otherwise poll getResponse briefly (3s)
+  for (let i = 0; i < 30; i++) {
+    const t = window.turnstile.getResponse
+      ? window.turnstile.getResponse(captchaWidgetId)
+      : null;
+    if (t) return (captchaToken = t);
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return null;
+}
 
   captchaToken = await getTurnstileToken();
   if (!captchaToken) {
