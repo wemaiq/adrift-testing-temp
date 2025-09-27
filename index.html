@@ -797,11 +797,6 @@ header.ripple span.figtree-adrift {
 
   /* =====================
      Intro sequence
-
-
-<script>
-  /* =====================
-     Intro sequence
      ===================== */
   const introOverlay = document.getElementById('intro-overlay');
   const introText = document.getElementById('intro-text');
@@ -2059,7 +2054,7 @@ resetTurnstile();
 
     const body = `
       <textarea class="compose-field" id="releaseInput" maxlength="200" placeholder="${placeholderText}"></textarea>
-<div id="cf-turnstile-container" style="position:absolute;left:-9999px;top:-9999px;"></div>
+<div id="cf-turnstile-container" style="height:0;width:0;overflow:hidden" aria-hidden="true"></div>
 
       <div class="compose-foot">
         <div><span id="charCount">0</span>/200</div>
@@ -2305,7 +2300,7 @@ fetchTotalDoubts().then(count => {
     { offset: 0.75, opacity: 1, transform: 'translate3d(0,0,0) scale(1)', textShadow: '0 0 0 #fff' }
   ];
 
-  const letters = [...header.children];
+const letters = [...header.querySelectorAll(':scope > span > span')];
   const anims = letters.map((el, i) => {
     const a = el.animate(frames, {
       duration: 4000,
