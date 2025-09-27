@@ -2033,6 +2033,7 @@ resetTurnstile();
 
     const body = `
       <textarea class="compose-field" id="releaseInput" maxlength="200" placeholder="${placeholderText}"></textarea>
+      <div id="cf-turnstile-container" style="height:0;width:0;overflow:hidden;"></div>
       <div id="captchaSlot" style="height:0;overflow:hidden;"></div>
 
       <div class="compose-foot">
@@ -2059,6 +2060,8 @@ resetTurnstile();
     const input = document.getElementById('releaseInput');
     const count = document.getElementById('charCount');
     const submit = document.getElementById('submitDoubt');
+
+    renderTurnstileInvisible('#cf-turnstile-container');
 
     input.addEventListener('input', () => {
       count.textContent = input.value.length;
