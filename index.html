@@ -2034,7 +2034,6 @@ resetTurnstile();
     const body = `
       <textarea class="compose-field" id="releaseInput" maxlength="200" placeholder="${placeholderText}"></textarea>
       <div id="cf-turnstile-container" style="height:0;width:0;overflow:hidden;"></div>
-      <div id="captchaSlot" style="height:0;overflow:hidden;"></div>
 
       <div class="compose-foot">
         <div><span id="charCount">0</span>/200</div>
@@ -2054,7 +2053,6 @@ resetTurnstile();
     });
 
     // Mount invisible Turnstile after the composer is in the DOM
-    renderTurnstileInvisible('#captchaSlot');
 
 
     const input = document.getElementById('releaseInput');
@@ -2082,14 +2080,25 @@ resetTurnstile();
 
       try {
         // Execute Turnstile to get a fresh token
-if (window.turnstile && captchaWidgetId !== null) {
+async function getTurnstileToken() {
+  // Wait up to ~2s for widget to exist if render is still racing
+  let tries = 20;
+  while (captchaWidgetId === null && tries-- > 0) {
+    await new Promise(r => setTimeout(r, 100));
+  }
+  if (!window.turnstile || captchaWidgetId === null) return null;
+
   try {
+    // Executes the invisible check; callback will set captchaToken too
     await window.turnstile.execute(captchaWidgetId);
-    captchaToken = window.turnstile.getResponse(captchaWidgetId);
-  } catch(_) {
-    captchaToken = null;
+    return window.turnstile.getResponse(captchaWidgetId) || captchaToken;
+  } catch {
+    return null;
   }
 }
+
+captchaToken = await getTurnstileToken();
+
 if (!captchaToken) {
   alert('Please complete the quick check, then try again.');
   submit.disabled = false;
@@ -2099,7 +2108,7 @@ if (!captchaToken) {
 
 // Send token with your text
 const { id, created_at, doubt } = await postDoubtToN8N(text, captchaToken);
-
+resetTurnstile();
         const b = new Boat(variant);
         b.entry = {
           text: doubt,
