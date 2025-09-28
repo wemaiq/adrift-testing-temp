@@ -1574,6 +1574,26 @@ async function postToWorker(text, token){
   return true;
 }
 
+async function postToWorker(text, token){
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, "cf-turnstile-response": token })
+  });
+
+  let data = {};
+  try { data = await res.json(); } catch(_) {}
+
+  // ⬇️ Add this line
+  console.log('[intake] status:', res.status, 'body:', data);
+
+  if (!res.ok || !data?.ok) {
+    const msg = data?.error || `Worker request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return true;
+}
+
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d', { alpha:true });
   const boatVideo = document.getElementById('boatVideo');
