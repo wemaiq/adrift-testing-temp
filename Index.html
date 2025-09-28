@@ -1245,7 +1245,7 @@ async function fetchApprovedDoubts(limit = 600) {
   for (let i = 0; i < selectedIds.length; i += CHUNK) {
     const chunk = selectedIds.slice(i, i + CHUNK);
     // quote each UUID -> "uuid"
-    const encoded = chunk.map(id => encodeURIComponent(id)).join(',');
+const encoded = chunk.map(id => encodeURIComponent(`"${id}"`)).join(',');
 const url = `${SUPABASE_URL}/rest/v1/doubts?select=id,doubt,created_at&id=in.(${encoded})`;
 
     const res = await fetch(url, {
