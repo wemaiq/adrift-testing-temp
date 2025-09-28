@@ -1559,33 +1559,17 @@ const WORKER_URL = 'https://adrift-intake.hiwemaiq.workers.dev';
 async function postToWorker(text, token){
   const res = await fetch(WORKER_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    // IMPORTANT: the token key must be "cf-turnstile-response"
-    body: JSON.stringify({ text, "cf-turnstile-response": token })
-  });
-
-  let data = {};
-  try { data = await res.json(); } catch(_) {}
-  if (!res.ok || !data?.ok) {
-    const msg = data?.error || `Worker request failed (${res.status})`;
-    throw new Error(msg);
-  }
-  // Worker doesn't return an id — we publish later via the batch.
-  return true;
-}
-
-async function postToWorker(text, token){
-  const res = await fetch(WORKER_URL, {
-    method: 'POST',
+    mode: 'cors',
+    credentials: 'omit',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, "cf-turnstile-response": token })
   });
 
-  let data = {};
-  try { data = await res.json(); } catch(_) {}
+  const raw = await res.text().catch(()=> "");
+  console.log('[intake] status:', res.status, 'x-intake:', res.headers.get('x-intake'), 'raw:', raw);
 
-  // ⬇️ Add this line
-  console.log('[intake] status:', res.status, 'body:', data);
+  let data = {};
+  try { data = JSON.parse(raw); } catch (_) {}
 
   if (!res.ok || !data?.ok) {
     const msg = data?.error || `Worker request failed (${res.status})`;
