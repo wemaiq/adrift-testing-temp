@@ -25,6 +25,9 @@
 <meta name="description" content="Adrift is a quiet digital space where people can anonymously share doubts as paper boats, or read others’ doubts drifting in and out of view.">
 <meta name="keywords" content="anonymous doubts, share doubts, read doubts, paper boats, quiet space, uncertainty">
 
+<!-- Press -->
+<meta name="press-contact" content="adrift.site.press@gmail.com">
+
 <!-- Open Graph -->
 <meta property="og:title" content="Adrift — A Quiet Place to Share or Read Anonymous Doubts">
 <meta property="og:description" content="A quiet place to anonymously share doubts as paper boats, or read others’ drifting doubts.">
@@ -1749,11 +1752,7 @@ document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !bgAu
   /* ===== Boats ===== */
   const CROP = {x:0, y:0, w:1, h:1};
   const BOAT_COUNT = window.innerWidth <= 640 ? 8 : 11, BOAT_HEIGHT=140;
-  const SPEED_X = 0.10;
-const BOB_AMPL = 6;        // was 12
-const BOB_FREQ = 0.0011;   // was 0.0016 (slower sway)
-const GLOBAL_BOB_MULT = 0.85; // master dimmer for all bobbing (tweak 0.6–0.9)
-
+  const SPEED_X=0.10, BOB_AMPL=12, BOB_FREQ=0.0016;
 
   const COLLISION_PAD = 15, PUSH_STRENGTH = 0.02, FRICTION = 0.34;
 
@@ -1880,19 +1879,7 @@ function pickRandomDoubt() {
         this.x += SPEED_X + this.vx; 
         if(this.x > W + (this._w||160)) this.reset(false); 
       }
-// Make bob amplitude proportional to rendered size (scale)
-// Smaller boats (near top) => smaller scale => smaller bob
-const yForScale = (this.y ?? this.yBase);
-const yNorm = Math.max(0, Math.min(1, yForScale / H));
-const scale = PERSPECTIVE_MIN_SCALE + (PERSPECTIVE_MAX_SCALE - PERSPECTIVE_MIN_SCALE) * yNorm;
-
-// Option A (simple): linear with scale
-// const sizeFactor = scale;
-
-// Option B (gentler on small boats): slightly sublinear
-const sizeFactor = Math.pow(scale, 1.25);
-
-const bob = Math.sin(this.phase + t * BOB_FREQ) * (BOB_AMPL * sizeFactor);
+      const bob = Math.sin(this.phase + t*BOB_FREQ) * BOB_AMPL; 
       this.y = this.yBase + bob + this.vy;
 
       const w = this._w || (BOAT_HEIGHT*1.8), h = this._h || BOAT_HEIGHT;
