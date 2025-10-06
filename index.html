@@ -1879,7 +1879,7 @@ function pickRandomDoubt() {
         this.x += SPEED_X + this.vx; 
         if(this.x > W + (this._w||160)) this.reset(false); 
       }
-      const bob = Math.sin(this.phase + t*BOB_FREQ) * BOB_AMPL * 0.3;
+      const bob = Math.sin(this.phase + t*BOB_FREQ) * BOB_AMPL * 0.6;
 
       this.y = this.yBase + bob + this.vy;
 
