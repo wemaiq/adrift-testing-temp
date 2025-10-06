@@ -1876,7 +1876,19 @@ function pickRandomDoubt() {
         this.x += SPEED_X + this.vx; 
         if(this.x > W + (this._w||160)) this.reset(false); 
       }
-      const bob = Math.sin(this.phase + t*BOB_FREQ) * BOB_AMPL; 
+// Make bob amplitude proportional to rendered size (scale)
+// Smaller boats (near top) => smaller scale => smaller bob
+const yForScale = (this.y ?? this.yBase);
+const yNorm = Math.max(0, Math.min(1, yForScale / H));
+const scale = PERSPECTIVE_MIN_SCALE + (PERSPECTIVE_MAX_SCALE - PERSPECTIVE_MIN_SCALE) * yNorm;
+
+// Option A (simple): linear with scale
+// const sizeFactor = scale;
+
+// Option B (gentler on small boats): slightly sublinear
+const sizeFactor = Math.pow(scale, 1.25);
+
+const bob = Math.sin(this.phase + t * BOB_FREQ) * (BOB_AMPL * sizeFactor);
       this.y = this.yBase + bob + this.vy;
 
       const w = this._w || (BOAT_HEIGHT*1.8), h = this._h || BOAT_HEIGHT;
