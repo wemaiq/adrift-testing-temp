@@ -1749,7 +1749,11 @@ document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !bgAu
   /* ===== Boats ===== */
   const CROP = {x:0, y:0, w:1, h:1};
   const BOAT_COUNT = window.innerWidth <= 640 ? 8 : 11, BOAT_HEIGHT=140;
-  const SPEED_X=0.10, BOB_AMPL=12, BOB_FREQ=0.0016;
+  const SPEED_X = 0.10;
+const BOB_AMPL = 6;        // was 12
+const BOB_FREQ = 0.0011;   // was 0.0016 (slower sway)
+const GLOBAL_BOB_MULT = 0.85; // master dimmer for all bobbing (tweak 0.6–0.9)
+
 
   const COLLISION_PAD = 15, PUSH_STRENGTH = 0.02, FRICTION = 0.34;
 
